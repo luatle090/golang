@@ -12,8 +12,9 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 	"math/cmplx"
-	"os"
+	"net/http"
 	"runtime"
 	"sync"
 	"time"
@@ -61,9 +62,14 @@ func main() {
 
 	fmt.Println("rendered in:", time.Since(start)) // in ra thời gian chạy
 
-	f, _ := os.Create("image.png")
-	png.Encode(f, img) // NOTE: ignoring errors
-	f.Close()
+	// f, _ := os.Create("image.png")
+	// png.Encode(f, img) // NOTE: ignoring errors
+	// f.Close()
+
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		png.Encode(w, img)
+	})
+	log.Fatal(http.ListenAndServe("localhost:8000", nil))
 }
 
 func mandelbrot(z complex128) color.Color {
