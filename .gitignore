@@ -1,3 +1,5 @@
 slang/
 testing/
 *.exe
+.vscode/
+server/reverb-disconnect.go
