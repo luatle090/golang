@@ -2,18 +2,25 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
+
+type Data struct {
+	Offset int
+	Key    string
+	Value  string
+}
 
 const LOG_FILE = "log2.log"
 
-var vFlag = flag.Bool("set", false, "Set key and value into database")
+// var vFlag = flag.Bool("set", false, "Set key and value into database")
 var nextOffset int = 0
-var offsets = make(map[string]int)
+var offsets = make(map[string]Data)
+
 var moveCursorToNext = 1
 
 func main() {
@@ -65,6 +72,12 @@ func main() {
 			}
 			fmt.Println(value)
 		}
+
+		if token[0] == "merge" {
+			if err := db_compaction(); err != nil {
+				log.Fatalln(err)
+			}
+		}
 	}
 }
 
@@ -84,7 +97,7 @@ func db_set(key, value string) error {
 	defer file.Close()
 
 	n, err := fmt.Fprintf(file, "%s,%s\n", key, value)
-	hashIndex(key, n)
+	hashIndex(key, value, n)
 	if err != nil {
 		return err
 	}
@@ -105,17 +118,16 @@ func db_get(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	file.Seek(int64(offset), 0)
-	scanner := bufio.NewScanner(file)
-	var valueFromLastKey string
+	// file.Seek(int64(offset), 0)
+	// scanner := bufio.NewScanner(file)
+	// var valueFromLastKey string
 
-	for scanner.Scan() {
-		str := strings.Split(scanner.Text(), ",")
-		if str[0] == key {
-			valueFromLastKey = str[1]
-		}
-	}
-	return valueFromLastKey, nil
+	// if scanner.Scan() {
+	// 	str := strings.Split(scanner.Text(), ",")
+	// 	valueFromLastKey = str[1]
+	// }
+	// return valueFromLastKey, nil
+	return offset.Value, nil
 }
 
 // file có tồn tại
@@ -128,17 +140,17 @@ func fileExists(filename string) bool {
 }
 
 // set key và offset
-func hashIndex(key string, n int) {
-	offsets[key] = nextOffset
+func hashIndex(key, value string, n int) {
+	offsets[key] = Data{Offset: nextOffset, Key: key, Value: value}
 	nextOffset += n
 	fmt.Println(offsets)
 }
 
 // lấy offset từ trong map offset
-func getOffset(key string) (int, error) {
+func getOffset(key string) (Data, error) {
 	offset, ok := offsets[key]
 	if !ok {
-		return 0, fmt.Errorf("not found key %s", key)
+		return Data{}, fmt.Errorf("not found key %s", key)
 	}
 	return offset, nil
 }
@@ -175,7 +187,7 @@ func loadIndex() {
 		byte := len(str)
 
 		prop := strings.Split(str, ",")
-		offsets[prop[0]] = n
+		offsets[prop[0]] = Data{Offset: n, Key: prop[0], Value: prop[1]}
 		n += byte + moveCursorToNext
 
 	}
@@ -187,3 +199,30 @@ func loadIndex() {
 }
 
 // TODO: feature Compaction
+func db_compaction() error {
+	file, err := os.Create(generateFileName())
+	if err != nil {
+		return err
+	}
+	for _, data := range offsets {
+		_, err := fmt.Fprintf(file, "%s,%s\n", data.Key, data.Value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func generateFileName() string {
+	current := time.Now()
+	// current.Hour()
+	// current.Minute()
+	// current.Second()
+	// current.YearDay()
+	// current.Year()
+	return fmt.Sprintf("%d-file.log", current.Unix())
+}
+
+func (dt Data) String() string {
+	return fmt.Sprintf("data %s offset - %d\n", dt.Value, dt.Offset)
+}
