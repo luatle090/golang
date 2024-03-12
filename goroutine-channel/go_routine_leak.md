@@ -57,8 +57,6 @@ func main(){
 ## Leak
 
 ```go
-// You can edit this code!
-// Click here and start typing.
 package main
 
 import "fmt"
@@ -96,10 +94,13 @@ func main() {
 	printer(naturals)
 }
 ```
-#### Ví dụ 1:
-giá trị in ra là: 0 2 3 4 5 6 7 8 9 10 ... 97 98 99 close counter
-Để ý: giá trị 1 bị mất trong dãy in ra. Và close computing ko xuất hiện
-Lý do: Giá trị 1 đã đc nhận trong computing nhưng khi pass vào biến out trong computing thì ko có giá trị nào nhận tiếp nên channel này bị chặn lại, đó cũng là lý do closed computing ko xuất hiện trong chương trình. => goroutine leak, 
+#### Ví dụ 1: rò rỉ do pass sai channel
+giá trị in ra là: 
+```cmd
+0 2 3 4 5 6 7 8 9 10 ... 97 98 99 close counter
+```
+Để ý: giá trị 1 bị mất trong dãy in ra. Và dòng print thông báo ```closed computing``` ko xuất hiện.
+**Lý do:** Giá trị 1 đã đc nhận trong computing nhưng khi pass vào biến out trong computing thì ko có giá trị nào nhận tiếp nên channel này bị chặn lại, đó cũng là lý do closed computing ko xuất hiện trong chương trình. => goroutine leak
 
 #### Ví dụ 2: Đổi chỗ channel go 
 
@@ -118,15 +119,15 @@ func main() {
 Hàm computing(squares, nauturals) đổi chỗ channel.
 giá trị in ra là 0 1 2 3 4 5 6 7 8 9 10 ... 97 98 99 close counter
 Chỉ close mỗi counter.
-Lý do: do channel đầu vào là squares mà channel này hiện ko có giá trị nào được gửi vào nên goroutine này sẽ bị block cho đến khi có giá trị được gửi vào. Hàm printer thì tiêu thụ naturals nên khi tiêu thị hết thì goroutine counter có thể đóng được luồng
+**Lý do:** do channel đầu vào là squares mà channel này hiện ko có giá trị nào được gửi vào nên goroutine này sẽ bị block cho đến khi có giá trị được gửi vào. Hàm printer thì tiêu thụ naturals nên khi tiêu thị hết thì goroutine counter có thể đóng được luồng.
 
+---
+# Leak goroutine (dịch từ blog uber)
 
-# Leak goroutine
+Một thành phần quan trọng của ngữ nghĩa channel là blocking, trong đó hoạt động của channel tạm dừng thực thi goroutine cho đến khi đạt được điểm hẹn (nghĩa là tìm thấy đối tác liên lạc). 
+Cụ thể hơn, đối với một channel không có bộ đệm, người gửi sẽ bị chặn cho đến khi có người nhận channel và ngược lại. Một goroutine có thể bị chặn mãi mãi khi cố gửi hoặc nhận trên một channel; tình huống mà một goroutine bị chặn không bao giờ được bỏ chặn được gọi là rò rỉ goroutine . Khi quá nhiều goroutine bị rò rỉ, hậu quả có thể rất nghiêm trọng. Các goroutine bị rò rỉ tiêu thụ các tài nguyên như bộ nhớ không được giải phóng hoặc thu hồi. 
 
-Một thành phần quan trọng của ngữ nghĩa kênh là chặn, trong đó hoạt động của kênh tạm dừng thực thi goroutine cho đến khi đạt được điểm hẹn (nghĩa là tìm thấy đối tác liên lạc). 
-Cụ thể hơn, đối với một kênh không có bộ đệm, người gửi sẽ chặn cho đến khi người nhận đến kênh và ngược lại. Một goroutine có thể bị chặn mãi mãi khi cố gửi hoặc nhận trên một kênh; tình huống mà một goroutine bị chặn không bao giờ được bỏ chặn được gọi là rò rỉ goroutine . Khi quá nhiều goroutine bị rò rỉ, hậu quả có thể rất nghiêm trọng. Các goroutine bị rò rỉ tiêu thụ các tài nguyên như bộ nhớ không được giải phóng hoặc thu hồi. 
-
-**Lưu ý**: Các kênh đệm cũng có thể gây rò rỉ goroutine khi bộ đệm đầy. Các goroutine gửi khác sẽ bị block lại cho cho đến khi buffer còn vị trí trống. 
+> **Lưu ý**: Các channel đệm cũng có thể gây rò rỉ goroutine khi bộ đệm đầy. Các goroutine gửi khác sẽ bị block lại cho cho đến khi buffer còn vị trí trống. 
 
 Các lỗi lập trình (ví dụ: luồng điều khiển phức tạp, trả về sớm, timeout), có thể dẫn đến sự không khớp trong giao tiếp giữa các goroutine, trong đó một hoặc nhiều goroutine có thể bị chặn nhưng không có goroutine nào khác đc tạo điều kiện cần thiết để bỏ chặn. Rò rỉ goroutine ngăn bộ thu gom rác thu hồi channel được liên kết, ngăn xếp goroutine và tất cả các đối tượng có thể truy cập của goroutine bị chặn vĩnh viễn. Đối với các dịch vụ hoạt động lâu dài, các rò rỉ nhỏ sẽ tích tụ theo thời gian sẽ làm trầm trọng thêm vấn đề. 
 
@@ -134,13 +135,13 @@ Các lỗi lập trình (ví dụ: luồng điều khiển phức tạp, trả v
 
 Chúng tôi thực hiện một cách tiếp cận thực tế để phát hiện rò rỉ goroutine đối với các chương trình chạy lâu dài trong quá trình sản xuất đáp ứng tiêu chí đã nói ở trên. Tiền đề và quan sát quan trọng của chúng tôi như sau:
 
-1. Nếu một chương trình có số lượng rò rỉ goroutine không nhỏ, thì cuối cùng nó sẽ được biểu thị thông qua số lượng lớn goroutine bị chặn trên một số hoạt động của kênh
-2. Chỉ một vài vị trí source code (liên quan đến hoạt động của kênh) chiếm hầu hết các goroutine bị rò rỉ
+1. Nếu một chương trình có số lượng rò rỉ goroutine không nhỏ, thì cuối cùng nó sẽ được biểu thị thông qua số lượng lớn goroutine bị chặn trên một số hoạt động của channel
+2. Chỉ một vài vị trí source code (liên quan đến hoạt động của channel) chiếm hầu hết các goroutine bị rò rỉ
 3. Rò rỉ goroutine hiếm gặp, trong khi không lý tưởng, phát sinh chi phí thấp và có thể bị bỏ qua
 
 Với quan quan điểm 1 được chứng minh bằng sự gia tăng đột biến về số lượng goroutine cho các chương trình bị rò rỉ. 
 
-Với quan điểm #2 chỉ đơn giản nói rằng không phải tất cả các hoạt động của kênh đều bị rò rỉ, nhưng vị trí nguồn của các nguyên nhân rò rỉ đáng kể phải được thực hiện thường xuyên để phát hiện rò rỉ. Vì bất kỳ goroutine bị rò rỉ nào vẫn tồn tại trong phần còn lại của vòng đời dịch vụ, nên việc liên tục gặp phải các tình huống rò rỉ cuối cùng sẽ góp phần tạo ra một lượng lớn goroutine bị chặn. Điều này đặc biệt đúng đối với các rò rỉ gây ra bởi các thao tác đồng thời có thể truy cập thông qua nhiều đường dẫn thực thi khác nhau và/hoặc trong các vòng lặp. 
+Với quan điểm #2 chỉ đơn giản nói rằng không phải tất cả các hoạt động của channel đều bị rò rỉ, nhưng vị trí nguồn của các nguyên nhân rò rỉ đáng kể phải được thực hiện thường xuyên để phát hiện rò rỉ. Vì bất kỳ goroutine bị rò rỉ nào vẫn tồn tại trong phần còn lại của vòng đời dịch vụ, nên việc liên tục gặp phải các tình huống rò rỉ cuối cùng sẽ góp phần tạo ra một lượng lớn goroutine bị chặn. Điều này đặc biệt đúng đối với các rò rỉ gây ra bởi các thao tác đồng thời có thể truy cập thông qua nhiều đường dẫn thực thi khác nhau và/hoặc trong các vòng lặp. 
 
 Cuối cùng, điểm #3 là một cân nhắc thực tế. Nếu một thao tác gây rò rỉ hiếm khi gặp phải, thì tác động của nó đối với việc tích lũy bộ nhớ sẽ ít nghiêm trọng hơn. Dựa trên những quan sát thực tế này, chúng tôi đã thiết kế LeakProf, một chỉ báo rò rỉ đáng tin cậy với ít thông báo sai và chi phí thời gian chạy tối thiểu.
 
@@ -148,7 +149,7 @@ Cuối cùng, điểm #3 là một cân nhắc thực tế. Nếu một thao tá
 
 1. Hàm trả về sớm
 
-Mẫu này xảy ra bất cứ khi nào một số goroutine dự kiến sẽ giao tiếp, nhưng một số mã if lại return sớm mà không tham gia vào kênh giao tiếp, khiến channel send phải chờ đợi mãi mãi (bị block do ko có gorountine nào nhận). Điều này xảy ra khi các đối tác truyền thông không tính đến tất cả các đường đi thực thi có thể có.
+Mẫu này xảy ra bất cứ khi nào một số goroutine dự kiến sẽ giao tiếp, nhưng một số mã if lại return sớm mà không tham gia vào channel giao tiếp, khiến channel send phải chờ đợi mãi mãi (bị block do ko có gorountine nào nhận). Điều này xảy ra khi các đối tác truyền thông không tính đến tất cả các đường đi thực thi có thể có.
 
 ```go {linenos=table,hl_lines=[14]}
 func f(...){
@@ -258,9 +259,10 @@ func ChannelIteration(){
 ```
 Để cho ngắn gọn, chúng ta sẽ mượn kiến trúc producer-consumer được giới thiệu trong Tranh chấp truyền thông. Channel queueJobs được cấp phát ở dòng 3. Các producer là các goroutines được tạo ra trong vòng lặp for (dòng 3) với từ khóa go (dòng 5), trong đó mỗi người gửi gửi một thông báo (dòng 5). Consumer (dòng 10) nhận các message bằng cách dùng for-range qua queueJobs, vòng lặp ở dòng 11 sẽ thực hiện nhận message. Mong đợi ở đây là một khi producer không gửi message nữa, thì consumer sẽ thoát khỏi vòng lặp và kết thúc. Tuy nhiên, trong trường hợp không có thao tác đóng trên kênh, for-range sẽ bị chặn vì không có thêm message nào được gửi, dẫn đến rò rỉ.
 
-Vì parent của producer-consumer đợi cho đến khi tất cả thông điệp được gửi (thông qua cấu trúc WaitGroup), nên giải pháp là thêm close(queueJobs) sau wg.Wait() (dòng 16) hoặc dưới dạng câu lệnh defer close(queueJobs) ngay sau khai báo queueJobs. Sau khi tất cả các tin nhắn được gửi, parent goroutine sẽ đóng queueJobs, báo hiệu cho consumer ngừng lặp queueJobs và do đó kết thúc và được thu gom rác.
+**Giải pháp:**
+Vì parent của producer-consumer đợi cho đến khi tất cả thông điệp được gửi (thông qua cấu trúc WaitGroup), nên giải pháp là thêm ```close(queueJobs)``` sau wg.Wait() (dòng 16) hoặc dưới dạng câu lệnh ```defer close(queueJobs)``` ngay sau khai báo queueJobs. Sau khi tất cả các tin nhắn được gửi, parent goroutine sẽ đóng queueJobs, báo hiệu cho consumer ngừng lặp queueJobs và do đó kết thúc và được thu gom rác.
 
-Cách 1
+Cách 1: Thêm ```close(queueJobs)``` sau wg.Wait()
 
 ```go
 func ChannelIteration(...){
@@ -285,7 +287,7 @@ func ChannelIteration(...){
 }
 ```
 
-Cách 2
+Cách 2: Sử dụng ```defer close(queueJobs)```
 
 ```go
 func ChannelIteration(){
@@ -314,8 +316,7 @@ func ChannelIteration(){
 
 Tham khảo
 
-https://webcache.googleusercontent.com/search?q=cache:rUrdN78za6oJ:https://www.uber.com/blog/leakprof-featherlight-in-production-goroutine-leak-detection/&cd=10&hl=vi&ct=clnk&gl=vn
-
+https://www.uber.com/en-VN/blog/leakprof-featherlight-in-production-goroutine-leak-detection/?_gl=1*1p11hz5*_ga*MTM4NjkxMzE5My4xNzEwMjExMDI0*_ga_XTGQLY6KPT*MTcxMDIxMTAyNC4xLjEuMTcxMDIxMTAyNC4wLjAuMA..&_ga=2.182629990.1553125118.1710211025-1386913193.1710211024
 
 
 # Sử dụng goleak để phát hiện rò rỉ
