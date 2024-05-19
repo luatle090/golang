@@ -14,6 +14,18 @@ a := <-ch //receive: a nhận value từ channel
 
 <-ch // receive and discard: nhận giá trị nhưng ko xử lý
 
+### Khai báo channel pass a channel
+
+var next chan chan struct{}
+
+x := make(chan struct{})
+
+next <- x  // send: x send value là channel vào channel
+
+a := <-next // receive: a nhận value là channel từ channel next
+
+Khai báo channel kiểu channel, Channel có chức năng send và receive. Send gửi giá trị là channel vào channel, giống như gửi kiểu int như bên trên thì ta gửi là channel. Receive nhận lại giá trị từ channel là channel.
+
 ### Khai báo channel 1 chiều
 
 Khai báo này dành cho parameter hoặc signature return của hàm. 
