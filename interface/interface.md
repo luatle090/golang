@@ -177,14 +177,102 @@ func Parameter(geo Geometry, value int) int {
 }
 
 func main() {
-	p := new(Pentagon)
-	h := new(Hexagon)
+	p := new(Pentagon)		// Declare pointer Pentagon
+	h := new(Hexagon)		// Declare pointer Hexagon
 
 	g := [...]Geometry{p, h}
 
 	for _, i := range g {
 		fmt.Println(Parameter(i, 5))
 	}
+}
+```
+
+## Interface và con trỏ khi khai báo parameter hoặc return type của hàm
+
+Trong ví dụ trên ta sử dụng interface là argument của hàm, điều này có nghĩa là khi pass 1 kiểu cụ thể có implement interface thì kiểu đó sẽ thỏa mãn interface. Nhưng đôi khi ta lại **nhầm lẫn giữa việc khai báo con trỏ cho kiểu interface như là 1 kiểu cụ thể.** 
+
+Đối với hàm có **argument hoặc return type là interface thì ko cần phải khai báo kiểu con trỏ**. Như 2 ví dụ trên, interface hoàn toàn chấp nhận pointer hoặc value miễn nó thỏa mãn interface. 
+
+Ví dụ bên dưới file là con trỏ, tuy nhiên khi pass vào hàm readSomeThing thì pass vào bình thường, reader ko cần khai báo là kiểu con trỏ. 
+
+Với hàm readFromPointer thì File là 1 kiểu cụ thể nên sẽ có sự khác biệt giữa việc pass vào là con trỏ hay value.
+
+```golang
+
+type Pentagon struct{
+	reader bytes.Buffer
+}
+
+func newPentagon() Pentagon {
+	p := Pentagon{}
+	p.reader = bytes.Buffer{}
+	return Pentagon
+}
+
+func (p Pentagon) Read(b []byte) (int, error) {
+	return p.reader.Read(b)
+}
+
+// hàm nhận 
+func readSomeThing(reader io.Reader) {
+	buff := make([]byte, 1024)
+	reader.Read(buff)
+}
+
+// hàm chỉ nhận vào con trỏ File
+func readFromPointer(file *os.File){
+	buff := make([]byte, 1024)
+	file.Read()
+}
+
+func main(){
+	var file *os.File
+	file, _ = os.Open("filename")
+	defer file.Close()
+
+	readSomeThing(file)		// pass con trỏ vào interface
+	readFromPointer(file)	// pass con trỏ file vào vì hàm yêu cầu là con trỏ
+
+	p := newPentagon()		// newPentagon will return value type as Pentagon
+
+	readSomeThing(p)		// Vì Pentagon implement interface io.Reader nên pass thỏa mãn interface
+}
+
+```
+
+
+#### Tuy nhiên nếu bạn vẫn cố gắng tiếp tục sử dụng interface là kiểu con trỏ. Để sử dụng được cần lấy giá trị của interface
+
+```(*wheel.i).Edges()```
+
+
+```golang
+type Geometry interface {
+	Edges() int
+}
+
+type Pentagon struct {}
+
+func (p *Pentagon) Edges() int {
+	return 10
+}
+
+type Wheel struct {
+	i *I  // interface is pointer
+}
+
+
+func main(){
+	wheel := Wheel{i: &x}
+	// cách 1 
+	value := (*wheel.i).Edges()
+	fmt.Println(value)
+	
+	// cách 2: gán cho 1 giá trị rồi từ giá trị sử dụng
+	g := *wheel.i
+	value = g.Edges()
+	fmt.Println(value)
 }
 ```
 
@@ -314,13 +402,14 @@ Golang cung cấp cách để test liệu giá trị interface có chứa kiểu
 
 ```golang
 t, ok := i.(T)
+t, ok := i.(*T)  // khai báo type assertion cho con trỏ
 ```
 
 Giá trị trả về gồm 2 giá trị: giá trị kiểu cụ thể và boolean để kiểm tra. Nếu ```i``` chứa kiểu T thì ```ok``` sẽ là true và t sử dụng được. Ngược lại, ```ok``` sẽ là false và ```t ``` sẽ là zero value của kiểu ```T``` và panic.
 
 Kiểu ```Pentagon``` bên dưới implement interface ```Polygons``` bằng cách gán biến sau đó dùng type assert để về lại kiểu Pentagon.
 
-**Lưu ý: syntax của type assert là luôn phải có vế trái.**
+**Lưu ý: syntax của type assert là luôn phải có vế trái. Ví dụ bên dưới dùng type assert cho value**
 
 ```golang
 package main
@@ -355,6 +444,17 @@ func main() {
 	obj.NumberOfSide()
 	var pent Pentagon = obj.(Pentagon)
 	pent.Perimeter()
+}
+```
+
+### Type assertion và con trỏ
+
+Bên trên là kiểu type assertion là value. Nhưng **nếu interface đang là con trỏ thì sẽ khai bao là con trỏ**. Cách assertion cũng như trên, biến ```t``` lúc này là con trỏ
+
+```golang
+t, ok := i.(*T)
+if ok && t != nil{
+	fmt.Println("type t is not nil")
 }
 ```
 
@@ -988,6 +1088,13 @@ type File interface {
 Hàm writeHeader này sẽ chuyển chuỗi "Conetent-Type: ..." thành []byte rồi ghi header của HTTP response.
 
 ```golang
+// interface Writer trong package io
+type Writer interface {
+	Write(p []byte) (n int, err error)
+}
+```
+
+```golang
 func writeHeader(w io.Writer, contentType string) error {
 	if _, err := w.Write([]byte("Content-Type: ")); err != nil {
 		return err
@@ -1012,6 +1119,8 @@ type stringWriter interface {
 Hàm writeString khai báo ```interface stringWriter``` với hàm là ```WriteString```. Sử dụng assert để thăm dò kiểu cụ thể mà interface io.Writer đang giữ có hàm ```WriteString``` hay ko. Nếu có thì sử dụng nó, nếu ko thì cấp phát bộ nhớ tạm.
 
 Kỹ thuật ở đây là interface được khai báo ở nơi sẽ sử dụng và sử dụng assert để "cast" thành interface stringWriter. Đối với ngôn ngữ như java, c# ta dùng intancesof
+
+Tại sao nó hoạt động? ```Interface writer``` chỉ có duy nhất 1 hàm là ```write```, nên nếu ta muốn cũng thể gọi đc hàm ```WriteString```, để gọi đc ```WriteString``` thì phải cast về kiểu type cụ thể, nhưng vì ta hoàn toàn ko biết ```w``` đang giữ type cụ thể nào, vì vậy dùng 1 interface khác có hàm ```WriteString``` để kiểm tra xem liệu type cụ thể có implement ```WriteString```, nếu có thì gọi nó
 
 ```golang
 func writeString(w io.Writer, s string) (n int, err error) {
