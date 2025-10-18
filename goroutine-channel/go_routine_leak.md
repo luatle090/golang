@@ -64,6 +64,83 @@ func main(){
 }
 ```
 
+### Pass slice vào buffer channel
+
+Khai báo 1 buffer channel 
+
+argsChannel := make(chan []string, 3)
+
+Khai báo 1 slice dùng chung cho channel rồi pass slice này vào channel
+
+slice_ := make([]string, 1)
+
+argsChannel <- slice_
+
+Ở những lần sau sẽ sử dụng lại slice này và ghi đè phần tử để truyền tiếp giá trị.
+
+Tuy nhiên khi pass như vậy nếu ghi đè lên slice_ thì các goroutine chỉ nhận đúng 1 giá trị slice (go version 1.21) hoặc goroutine sẽ nhận giá trị trùng lặp với go version (1.25). Vì vậy phải tạo slice mới mỗi khi pass giá trị vào channel
+
+
+```go
+
+func main() {
+    urlList := []string{
+        "https://x.com/video1",
+        "https://x.com/video2",
+        "https://x.com/video3",
+    }
+
+    var wg sync.WaitGroup
+    argsChannel := make(chan []string)
+
+    // Tạo 3 worker goroutine
+    for i := 0; i < 3; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            for args := range argsChannel {
+                fmt.Printf("[Worker %d] Executing: %s\n", id, strings.Join(args, " "))
+            }
+        }(i)
+    }
+
+    // Slice dùng chung — gây lỗi
+    slice_ := make([]string, 1)
+
+    for _, url := range urlList {
+        slice_[0] = url
+        argsChannel <- slice_ // truyền cùng 1 slice bị ghi đè
+    }
+
+    close(argsChannel)
+    wg.Wait()
+}
+```
+
+
+go version 1.21
+```cmd
+[Worker 0] Executing: https://x.com/video3
+[Worker 1] Executing: https://x.com/video3
+[Worker 2] Executing: https://x.com/video3
+```
+go version 1.25
+```cmd
+[Worker 2] Executing: yt-dlp -f mp4 https://x.com/video1
+[Worker 0] Executing: yt-dlp -f mp4 https://x.com/video3
+[Worker 1] Executing: yt-dlp -f mp4 https://x.com/video3
+```
+
+Cách sửa là trong vòng lặp, tạo slice mới
+
+```go
+for _, url := range urlList {
+    silce_ := []string{url}
+    argsChannel <- slice_
+}
+
+```
+
 -------
 
 ## Leak
